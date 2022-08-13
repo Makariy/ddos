@@ -4,6 +4,19 @@
 
 ***
 
+
+## Description 
+
+The attack is being run from multiple instances, so it has the host 
+server that connects and manipulates the instances. Every instance 
+connects to the server via WebSocket and waits for the command. <br />
+The administrator of the server can command to start the attack on some 
+target and the server will go through every connected instance to deploy 
+the attack on the specified target. 
+
+***
+
+
 ## Deployment 
 
 ##### Requirements 
@@ -47,13 +60,4 @@ python3 scripts/connect.py <host>:<port>
 ```
 
 ***
-
-## Description 
-
-The attack is being run from multiple instances, so it has the host 
-server that connects and manipulates the instances. Every instance 
-connects to the server via WebSocket and waits for the command. <br />
-The administrator of the server can command to start the attack on some 
-target and the server will go through every connected instance to deploy 
-the attack on the specified target. 
 

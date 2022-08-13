@@ -41,12 +41,8 @@ async def _create_attack(target: Target):
             pipe.kill()
 
 
-async def start_attack(target: Target) -> Tuple[asyncio.Task, Callable[[], Coroutine]]:
-    """Starts the attack, and returns the asyncio.Task and function to check if it is running"""
-    task = asyncio.create_task(_create_attack(target))
+async def start_attack(target: Target) -> asyncio.Task:
+    """Starts the attack, and returns the asyncio.Task of the running process"""
+    return asyncio.create_task(_create_attack(target))
 
-    async def _is_task_running() -> bool:
-        return task.done()
-
-    return task, _is_task_running
 

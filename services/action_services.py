@@ -6,11 +6,6 @@ from models import Action
 from lib.utils import get_app
 
 
-ValidationErrorTyping = List[
-    Dict[Union[Literal['field', 'msg']], str | int]
-]
-
-
 async def get_action() -> Union[Action, None]:
     app = get_app()
     if hasattr(app.ctx, "action"):
@@ -20,11 +15,15 @@ async def get_action() -> Union[Action, None]:
     return None
 
 
-async def create_action(raw_action: Dict) -> Union[Tuple[Action, None], Tuple[None, ValidationErrorTyping]]:
+async def create_action(raw_action: Dict) -> Union[Tuple[Action, None], Tuple[None, List[Dict[str, str | int]]]]:
     try:
         action = Action(**raw_action)
         return action, None
     except ValidationError as e:
+        a = {
+            'field': "super field",
+            'msg': 'Super message'
+        }
         return None, [{
                 'field': error['loc'][0],
                 'msg': error['msg']

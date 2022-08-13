@@ -5,10 +5,10 @@ from sanic.server.websockets.impl import WebsocketImplProtocol
 
 from models import Client
 from services.action_services import get_action
-from lib.utils import get_app
+from lib.utils import get_app, wait_for
 
 
-async def wait_for_action(ws):
+async def wait_for_action(ws: WebsocketImplProtocol):
     """Enters infinite loop until action appears"""
     while True:
         if await get_action() is not None:

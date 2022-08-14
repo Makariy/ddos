@@ -1,5 +1,3 @@
-from typing import Tuple, Callable, Coroutine, Any
-
 import os
 import sys
 import subprocess
@@ -25,24 +23,15 @@ async def _is_attack_running(pipe) -> bool:
     return True
 
 
-async def _create_attack(target: Target):
+async def start_attack(target: Target):
     global ATTACK_DURATION
 
     pipe = await _run_workload(target, duration=ATTACK_DURATION)
-
     try:
-        while True:
-            if not await _is_attack_running(pipe):
-                return
+        while await _is_attack_running(pipe):
             await asyncio.sleep(0.1)
 
     finally:
         if await _is_attack_running(pipe):
             pipe.kill()
-
-
-async def start_attack(target: Target) -> asyncio.Task:
-    """Starts the attack, and returns the asyncio.Task of the running process"""
-    return asyncio.create_task(_create_attack(target))
-
 

@@ -1,5 +1,6 @@
-import json
 import logging
+import sys
+import json
 
 from websockets.connection import State
 from sanic.server.websockets.impl import WebsocketImplProtocol
@@ -9,13 +10,14 @@ from sanic.response import json as json_response
 
 from models import CommandStop
 from services.action_services import get_action, create_action, set_action, remove_action
-from services.ws_services import add_client, get_clients, dispatch_client
+from services.ws_services import add_client, remove_client, get_clients, dispatch_client
 
 
 bp = Blueprint("main")
 
 
-logger = logging.Logger(__package__)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='{%(filename)s:%(lineno)d} %(levelname)s - %(message)s')
+logger = logging.getLogger(__package__)
 
 
 @bp.websocket("/")
@@ -23,13 +25,17 @@ async def main_websocket(request: Request, ws: WebsocketImplProtocol):
     if await ws.recv() == "PING":
         # Register client
         client = await add_client(ws)
-        await ws.send(json.dumps({
-                "status": "success",
-                "service_ip": request.ip 
-            }))
-        logger.info(f"Client registered '{request.ip}'")
+        try:
+            await ws.send(json.dumps({
+                    "status": "success",
+                    "service_ip": request.ip
+                }))
+            logger.info(f"Client registered '{ws.io_proto.conn_info.peername}'")
 
-        await dispatch_client(client)
+            await dispatch_client(client)
+        finally:
+            logger.info(f"Removing client '{ws.io_proto.conn_info.peername}'")
+            await remove_client(client)
 
 
 @bp.post("/")

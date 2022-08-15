@@ -1,5 +1,4 @@
 from typing import Union, Literal
-from abc import ABC
 from dataclasses import dataclass
 from pydantic import BaseModel
 from sanic.server.websockets.impl import WebsocketImplProtocol

